@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const itemSchema = new mongoose.Schema({
     name: { type: String, required: true },
+    sname: { type: String, required: true, default: "snapmoviehd" },
     linkname: { type: String, unique: true },
     price: { type: Number, required: true, min: 0 },
     fullprice: { type: Number, required: true, min: 0 },
@@ -11,7 +12,6 @@ const itemSchema = new mongoose.Schema({
     type: { type: String, enum: ['movie', 'series'], required: true },
     language: [{ 
         type: String,
-        enum: ['Hindi','Urdu', 'English', 'Both'],
     }],
     availableFormats: [{ 
         type: String, 
@@ -21,12 +21,29 @@ const itemSchema = new mongoose.Schema({
     link720p: { type: String },
     link1080p: { type: String },
     link4k: { type: String },
+    linkonline: { type: String, default: "no"},
     isFreeToday: { type: Boolean, default: false },
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     description: { type: String, required: true },
     image1: { type: String }, // URL for image 1
     image2: { type: String }, // URL for image 2
     image3: { type: String }, // URL for image 3
+
+    // Social features
+    likes: { type: Number, default: 0 },
+    shares: { type: Number, default: 0 },
+    
+    // Comments as simple array of objects
+    comments: [{
+        username: { type: String, default: 'Anonymous' },
+        comment: { type: String, required: true },
+        likes: { type: Number, default: 0 },
+        createdAt: { type: Date, default: Date.now }
+    }],
+    commentsCount: { type: Number, default: 0 }
+
+    
+    
 }, { timestamps: true });
 
 const Item = mongoose.model('Item', itemSchema);
