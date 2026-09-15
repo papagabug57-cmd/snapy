@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   getItems,
+  getItems2,
   getItemsall,
   addItem,
   updateItem,
@@ -11,6 +12,9 @@ import {
   getfreeItem,
   updateItemfree,
   getItemsBySearch,
+  getItemsBySearchadult,
+  getItemsBySearch2,
+  getItemsBySearchall,
   getItemsallol, 
   incrementViews, 
   toggleLike,
@@ -23,15 +27,20 @@ const router = express.Router();
 
 // Route to fetch all items
 router.get('/', getItems);
-
+router.get('/a2', getItems2);
 router.get('/all', getItemsall);
 
 router.get('/category/:categoryName', getItemsByCategory);
 
 router.get('/categoryall/:categoryName', getItemsByCategoryall);
 
-
 router.get('/search/:query', getItemsBySearch);
+
+router.get('/searchadult/:query', getItemsBySearchadult);
+
+router.get('/search2/:query', getItemsBySearch2);
+
+router.get('/searchall/:query', getItemsBySearchall);
 
 router.get('/free', getfreeItem );
 
