@@ -61,7 +61,51 @@ export const getItems = async (req, res) => {
   }
 };
 
+export const getItems2 = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 24;
+    const skip = (page - 1) * limit;
 
+    const items = await Item.aggregate([
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      { $unwind: '$category' },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit }
+    ]);
+
+    const total = await Item.aggregate([
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      { $unwind: '$category' },
+      { $count: 'count' }
+    ]);
+
+    res.status(200).json({
+      items,
+      total: total[0]?.count || 0,
+      page,
+      pages: Math.ceil((total[0]?.count || 0) / limit)
+    });
+  } catch (error) {
+    console.error('Error fetching items:', error);
+    res.status(500).json({ error: 'Server error, could not fetch items.' });
+  }
+};
 
 export const getItem = async (req, res) => {
   try {
@@ -161,7 +205,7 @@ export const getItemsByCategory = async (req, res) => {
 };
 
 
-export const getItemsBySearch = async (req, res) => {
+export const getItemsBySearchall = async (req, res) => {
   try {
     const { query } = req.params; // Get the search query from the request params
 
@@ -181,6 +225,128 @@ export const getItemsBySearch = async (req, res) => {
   }
 };
 
+export const getItemsBySearch = async (req, res) => {
+  try {
+    const { query } = req.params; // Get the search query from the request params
+
+    const items = await Item.aggregate([
+      {
+        $lookup: {
+          from: 'categories', // Must match your actual MongoDB collection name
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      { $unwind: '$category' },
+      {
+        $match: {
+          'category.name': { $ne: 'Adult' }, // ✅ Exclude Adult category
+          name: { $regex: query, $options: 'i' } // ✅ Case-insensitive search
+        }
+      },
+      { $sort: { createdAt: -1 } } // Optional sorting by newest
+    ]);
+
+    // If no items found
+    if (items.length === 0) {
+      return res.status(200).json({ message: 'No items found by search', items });
+    }
+
+    // Return the found items
+    res.status(200).json({ message: 'Items searched successfully', items });
+  } catch (error) {
+    console.error('Error fetching items by search query:', error);
+    res.status(500).json({ message: 'Server error, could not fetch items' });
+  }
+};
+
+export const getItemsBySearchadult = async (req, res) => {
+  try {
+    const { query } = req.params;
+
+    const items = await Item.aggregate([
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      {
+        $unwind: '$category'
+      },
+      {
+        $match: {
+          'category.name': 'Adult', // ✅ Search ONLY in Adult category
+          name: {
+            $regex: query,
+            $options: 'i' // Case-insensitive
+          }
+        }
+      },
+      {
+        $sort: {
+          createdAt: -1
+        }
+      }
+    ]);
+
+    if (items.length === 0) {
+      return res.status(200).json({
+        message: 'No items found by search',
+        items
+      });
+    }
+
+    res.status(200).json({
+      message: 'Items searched successfully',
+      items
+    });
+  } catch (error) {
+    console.error('Error fetching items by search query:', error);
+    res.status(500).json({
+      message: 'Server error, could not fetch items'
+    });
+  }
+};
+
+export const getItemsBySearch2 = async (req, res) => {
+  try {
+    const { query } = req.params; // Get the search query from the request params
+
+    const items = await Item.aggregate([
+      {
+        $lookup: {
+          from: 'categories', // Must match your actual MongoDB collection name
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      { $unwind: '$category' },
+      {
+        $match: {
+          name: { $regex: query, $options: 'i' } // ✅ Case-insensitive search
+        }
+      },
+      { $sort: { createdAt: -1 } } // Optional sorting by newest
+    ]);
+
+    // If no items found
+    if (items.length === 0) {
+      return res.status(200).json({ message: 'No items found by search', items });
+    }
+
+    // Return the found items
+    res.status(200).json({ message: 'Items searched successfully', items });
+  } catch (error) {
+    console.error('Error fetching items by search query:', error);
+    res.status(500).json({ message: 'Server error, could not fetch items' });
+  }
+};
+
 
 export const addItem = async (req, res) => {
   try {
@@ -189,7 +355,6 @@ export const addItem = async (req, res) => {
     if (!categoryDoc) {
       return res.status(400).json({ message: 'Category not found' });
     }
-    // Handle image uploads
     const account = Number(req.body.account) || 1;
     const imageUrls = await uploadMultipleToCloudinary(req.files.map(file => file.path),account);
 
