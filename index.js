@@ -1,17 +1,18 @@
+import "dotenv/config";
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import adminRoutes from './routes/admin.routes.js';
 import itemRoutes from './routes/item.routes.js';
 import orderRoutes from './routes/order.routes.js';
+import groupRoutes from './routes/group.routes.js';
 import axios from "axios";
 
-dotenv.config();
+
 
 const app = express();
 
-const url = `https://snapmovieserver.onrender.com`;
+const url = `https://snapmovieserver-q60s.onrender.com`;
 const interval = 30000;
 
 function reloadWebsite() {
@@ -62,6 +63,7 @@ mongoose
 app.use('/api/admin', adminRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/group', groupRoutes);
 
 // Server
 const PORT = process.env.PORT || 8000;

@@ -2,7 +2,7 @@ import Item from '../models/item.model.js'; // Adjust the path according to your
 import Category from '../models/category.model.js';
 import { uploadMultipleToCloudinary } from '../utils/cloudinary.js'; // Ensure the correct import for your upload functions
 
-export const getItems = async (req, res) => {
+export const getItemsall = async (req, res) => {
   try {
     const items = await Item.find().populate('category'); // Adjust as necessary
     res.status(200).json({ items });
@@ -11,6 +11,56 @@ export const getItems = async (req, res) => {
     res.status(500).json({ error: 'Server error, could not fetch items.' });
   }
 };
+
+
+export const getItems = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 24;
+    const skip = (page - 1) * limit;
+
+    const items = await Item.aggregate([
+      {
+        $lookup: {
+          from: 'categories', // collection name (make sure it matches your MongoDB)
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      { $unwind: '$category' },
+      { $match: { 'category.name': { $ne: 'Adult' } } }, // ✅ exclude Adult
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit }
+    ]);
+
+    const total = await Item.aggregate([
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category'
+        }
+      },
+      { $unwind: '$category' },
+      { $match: { 'category.name': { $ne: 'Adult' } } },
+      { $count: 'count' }
+    ]);
+
+    res.status(200).json({
+      items,
+      total: total[0]?.count || 0,
+      page,
+      pages: Math.ceil((total[0]?.count || 0) / limit)
+    });
+  } catch (error) {
+    console.error('Error fetching items:', error);
+    res.status(500).json({ error: 'Server error, could not fetch items.' });
+  }
+};
+
 
 
 export const getItem = async (req, res) => {
@@ -41,7 +91,7 @@ export const getfreeItem = async (req, res) => {
     
 
 
-export const getItemsByCategory = async (req, res) => {
+export const getItemsByCategoryall = async (req, res) => {
   try {
     const { categoryName } = req.params; // Get the category name from the request
 
@@ -67,6 +117,49 @@ export const getItemsByCategory = async (req, res) => {
     res.status(500).json({ message: 'Server error, could not fetch items' });
   }
 };
+
+export const getItemsByCategory = async (req, res) => {
+  try {
+    const { categoryName } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 24;
+    const skip = (page - 1) * limit;
+
+    // Find the category by name
+    const category = await Category.findOne({ name: categoryName });
+
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    // Fetch items for that category with pagination + sort
+    const [items, total] = await Promise.all([
+      Item.find({ category: category._id })
+        .sort({ createdAt: -1 }) // newest first
+        .skip(skip)
+        .limit(limit)
+        .populate('category')
+        .lean(),
+      Item.countDocuments({ category: category._id })
+    ]);
+
+    if (items.length === 0) {
+      return res.status(404).json({ message: 'No items found for this category' });
+    }
+
+    res.status(200).json({
+      message: 'Items fetched successfully',
+      items,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error('Error fetching items by category name:', error);
+    res.status(500).json({ message: 'Server error, could not fetch items' });
+  }
+};
+
 
 export const getItemsBySearch = async (req, res) => {
   try {
@@ -97,11 +190,14 @@ export const addItem = async (req, res) => {
       return res.status(400).json({ message: 'Category not found' });
     }
     // Handle image uploads
-    const imageUrls = await uploadMultipleToCloudinary(req.files.map(file => file.path));
+    const account = Number(req.body.account) || 1;
+    const imageUrls = await uploadMultipleToCloudinary(req.files.map(file => file.path),account);
 
     const newItem = new Item({
       name: req.body.name,
+      sname: req.body.sname,
       linkname: req.body.lname,
+      isFreeToday: req.body.isFree,
       price: req.body.price,
       fullprice: req.body.fullprice,
       rating: req.body.rating,
@@ -113,6 +209,7 @@ export const addItem = async (req, res) => {
       link720p: req.body.link720p,
       link1080p: req.body.link1080p,
       link4k: req.body.link4k,
+      linkonline: req.body.linkonline,
       category: categoryDoc._id, // Use the ObjectId of the found category
       description: req.body.description,
       image1: imageUrls[0], // Store first image URL
@@ -132,27 +229,19 @@ export const updateItem = async (req, res) => {
   try {
     const { id } = req.params;
 
-
-    // Find the category by name
     const categoryDoc = await Category.findOne({ name: req.body.category });
     if (!categoryDoc) {
       return res.status(400).json({ message: 'Category not found' });
     }
 
-    // Find the existing item to retain the previous images if no new ones are uploaded
     const existingItem = await Item.findById(id);
     if (!existingItem) return res.status(404).json({ message: 'Item not found' });
 
-    // Handle image uploads if any files are provided
-    let imageUrls = [];
-    if (req.files && req.files.length > 0) {
-      imageUrls = await uploadMultipleToCloudinary(req.files.map(file => file.path));
-    }
-
-    // Construct updatedData, conditionally adding fields based on what was provided
     const updatedData = {
       name: req.body.name || existingItem.name,
+      sname: req.body.sname || existingItem.sname,
       linkname: req.body.lname || existingItem.linkname,
+      isFreeToday: req.body.isFree || existingItem.isFreeToday,
       price: req.body.price || existingItem.price,
       fullprice: req.body.fullprice || existingItem.fullprice,
       rating: req.body.rating || existingItem.rating,
@@ -164,19 +253,15 @@ export const updateItem = async (req, res) => {
       availableFormats: req.body.availableFormats
         ? req.body.availableFormats.split(',').map(format => format.trim())
         : existingItem.availableFormats,
-      link480p: req.body.link480p || existingItem.link480,
-      link720p: req.body.link720p || existingItem.link720,
-      link1080p: req.body.link1080p || existingItem.link1080,
+      link480p: req.body.link480p || existingItem.link480p,
+      link720p: req.body.link720p || existingItem.link720p,
+      link1080p: req.body.link1080p || existingItem.link1080p,
       link4k: req.body.link4k || existingItem.link4k,
+      linkonline: req.body.linkonline || existingItem.linkonline,
       category: categoryDoc._id || existingItem.category,
       description: req.body.description || existingItem.description,
-      // Update image URLs only if new images were uploaded, otherwise retain existing ones
-      image1: imageUrls[0] || existingItem.image1,
-      image2: imageUrls[1] || existingItem.image2,
-      image3: imageUrls[2] || existingItem.image3
     };
 
-    // Update the item in the database
     const updatedItem = await Item.findByIdAndUpdate(id, updatedData, { new: true });
 
     if (!updatedItem) return res.status(404).json({ message: 'Item not found' });
@@ -186,6 +271,7 @@ export const updateItem = async (req, res) => {
     res.status(500).json({ error: 'Server error, could not update item.' });
   }
 };
+
 
 
 export const updateItemfree = async (req, res) => {
@@ -231,4 +317,147 @@ export const deleteItem = async (req, res) => {
     console.error('Error deleting item:', error);
     res.status(500).json({ error: 'Server error, could not delete item.' });
   }
+};
+
+
+// Get all movies with online links available ----------->
+
+export const getItemsallol = async (req, res) => {
+    try {
+        // Get all movies with online streaming available
+        const items = await Item.find({ 
+            linkonline: { $ne: "no" },
+            type: "movie"
+        })
+        .populate('category')
+        .select('name sname linkname popularity rating linkonline category description image1 image2 image3 likes shares commentsCount language availableFormats createdAt')
+        .lean(); // Better performance
+        
+        res.status(200).json({ items });
+    } catch (error) {
+        console.error('Error fetching movies for reels:', error);
+        res.status(500).json({ error: 'Server error, could not fetch movies.' });
+    }
+};
+
+
+// Keep other functions for interactions
+export const incrementViews = async (req, res) => {
+    try {
+        const { movieId } = req.params;
+        
+        const movie = await Item.findByIdAndUpdate(
+            movieId,
+            { $inc: { popularity: 1 } },
+            { new: true }
+        );
+        
+        if (!movie) {
+            return res.status(404).json({ error: 'Movie not found' });
+        }
+        
+        res.status(200).json({ 
+            message: 'View count updated',
+            views: movie.popularity 
+        });
+    } catch (error) {
+        console.error('Error incrementing views:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+export const toggleLike = async (req, res) => {
+    try {
+        const { movieId } = req.params;
+        const { isLiked } = req.body;
+        
+        const increment = isLiked ? 1 : -1;
+        
+        const movie = await Item.findByIdAndUpdate(
+            movieId,
+            { $inc: { likes: increment } },
+            { new: true }
+        );
+        
+        if (!movie) {
+            return res.status(404).json({ error: 'Movie not found' });
+        }
+        
+        res.status(200).json({ 
+            message: isLiked ? 'Movie liked' : 'Movie unliked',
+            likes: movie.likes 
+        });
+    } catch (error) {
+        console.error('Error toggling like:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+export const addComment = async (req, res) => {
+    try {
+        const { movieId } = req.params;
+        const { comment, username = 'Anonymous' } = req.body;
+
+        if (!comment || comment.trim().length === 0) {
+            return res.status(400).json({ error: 'Comment cannot be empty' });
+        }
+
+        const newComment = {
+            username: username.trim(),
+            comment: comment.trim(),
+            likes: 0,
+            createdAt: new Date()
+        };
+
+        const movie = await Item.findByIdAndUpdate(
+            movieId,
+            { 
+                $push: { comments: newComment },
+                $inc: { commentsCount: 1 }
+            },
+            { new: true }
+        );
+
+        if (!movie) {
+            return res.status(404).json({ error: 'Movie not found' });
+        }
+
+        const addedComment = movie.comments[movie.comments.length - 1];
+
+        res.status(201).json({ 
+            message: 'Comment added successfully',
+            comment: addedComment,
+            commentsCount: movie.commentsCount
+        });
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+export const getComments = async (req, res) => {
+    try {
+        const { movieId } = req.params;
+        const { limit = 20, skip = 0 } = req.query;
+
+        const movie = await Item.findById(movieId)
+            .select('comments commentsCount name');
+
+        if (!movie) {
+            return res.status(404).json({ error: 'Movie not found' });
+        }
+
+        const sortedComments = movie.comments
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(parseInt(skip), parseInt(skip) + parseInt(limit));
+
+        res.status(200).json({ 
+            comments: sortedComments,
+            totalComments: movie.commentsCount,
+            hasMore: (parseInt(skip) + parseInt(limit)) < movie.comments.length
+        });
+    } catch (error) {
+        console.error('Error fetching comments:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
 };
