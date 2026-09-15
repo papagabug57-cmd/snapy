@@ -12,7 +12,7 @@ import axios from "axios";
 
 const app = express();
 
-const url = `https://snapmovieserver-q60s.onrender.com`;
+const url = `https://snapy-p4ae.onrender.com`;
 const interval = 30000;
 
 function reloadWebsite() {
