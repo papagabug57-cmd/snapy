@@ -30,8 +30,8 @@ setInterval(reloadWebsite, interval);
 
 // Allowed origins
 const allowedOrigins = [
-  'https://snapmoviehd.com',
-  'https://www.snapmoviehd.com',
+  'https://snapmoviehd.netlify.app',
+  'https://www.snapmoviehd.netlify.app',
   'http://localhost:3000'
 ];
 
