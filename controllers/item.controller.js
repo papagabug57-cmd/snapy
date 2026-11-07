@@ -425,6 +425,7 @@ export const updateItem = async (req, res) => {
       linkonline: req.body.linkonline || existingItem.linkonline,
       category: categoryDoc._id || existingItem.category,
       description: req.body.description || existingItem.description,
+      image1: req.body.image1 || existingItem.image1,
     };
 
     const updatedItem = await Item.findByIdAndUpdate(id, updatedData, { new: true });
