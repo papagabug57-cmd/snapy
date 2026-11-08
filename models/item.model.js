@@ -9,7 +9,7 @@ const itemSchema = new mongoose.Schema({
     popularity: { type: Number, default: 0 },
     rating: { type: Number, min: 0, max: 5, default: 0 },
     releaseDate: { type: Date, required: true },
-    type: { type: String, enum: ['movie', 'series', 'video', 'link1', 'link2', 'porn'], required: true },
+    type: { type: String, enum: ['movie', 'series', 'video', 'link1', 'link2', 'pn'], required: true },
     language: [{ 
         type: String,
     }],
